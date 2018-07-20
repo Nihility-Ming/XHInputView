@@ -266,6 +266,9 @@ static CGFloat keyboardAnimationDuration = 0.5;
 -(void)sendButtonClick:(UIButton *)button{
     if(self.sendBlcok){
         BOOL hideKeyBoard = self.sendBlcok(self.textView.text);
+        _textView.text = nil;
+        _placeholderLab.hidden = NO;
+        
         if(hideKeyBoard){
             [self hide];
         }
