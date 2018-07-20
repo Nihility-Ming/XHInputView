@@ -49,21 +49,28 @@ static CGFloat keyboardAnimationDuration = 0.5;
         [_textView removeObserver:self forKeyPath:@"contentSize"];
     }
 }
-+(void)showWithStyle:(InputViewStyle)style configurationBlock:(void(^)(XHInputView *inputView))configurationBlock sendBlock:(BOOL(^)(NSString *text))sendBlock{
-    XHInputView *inputView = [[XHInputView alloc] initWithStyle:style];
-    UIWindow *window = [UIApplication sharedApplication].delegate.window;
-    [window addSubview:inputView];
-    if(configurationBlock) configurationBlock(inputView);
-    inputView.sendBlcok = [sendBlock copy];
-    [inputView show];
++ (instancetype)showWithStyle:(InputViewStyle)style configurationBlock:(void(^)(XHInputView *inputView))configurationBlock sendBlock:(BOOL(^)(NSString *text))sendBlock{
+    static XHInputView *_inputView = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        _inputView = [[XHInputView alloc] initWithStyle:style];
+        UIWindow *window = [UIApplication sharedApplication].delegate.window;
+        [window addSubview:_inputView];
+    });
+    
+    if(configurationBlock) configurationBlock(_inputView);
+    _inputView.sendBlcok = [sendBlock copy];
+    [_inputView show];
+    return _inputView;
 }
+
 #pragma mark - private
 -(void)show{
     if([self.delegate respondsToSelector:@selector(xhInputViewWillShow:)]){
         [self.delegate xhInputViewWillShow:self];
     }
-    _textView.text = nil;
-    _placeholderLab.hidden = NO;
+    //    _textView.text = nil;
+    //    _placeholderLab.hidden = NO;
     
     if(_style == InputViewStyleLarge){
         if(_maxCount>0) _countLab.text = [NSString stringWithFormat:@"0/%ld",(long)_maxCount];
@@ -126,6 +133,7 @@ static CGFloat keyboardAnimationDuration = 0.5;
             _textView = [[UITextView alloc] initWithFrame:CGRectMake(XHInputView_StyleDefault_LRSpace, XHInputView_StyleDefault_TBSpace, XHInputView_ScreenW - 3*XHInputView_StyleDefault_LRSpace - sendButtonWidth, self.inputView.bounds.size.height-2*XHInputView_StyleDefault_TBSpace)];
             _textView.font = [UIFont systemFontOfSize:14];
             _textView.backgroundColor = [UIColor groupTableViewBackgroundColor];
+            _textView.autocorrectionType =  UITextAutocorrectionTypeNo;
             _textView.delegate = self;
             [_inputView addSubview:_textView];
             //KVO监听contentSize变化
@@ -266,14 +274,17 @@ static CGFloat keyboardAnimationDuration = 0.5;
 #pragma mark - 监听键盘
 - (void)keyboardWillAppear:(NSNotification *)noti{
     if(_textView.isFirstResponder){
+        self.hidden = NO;
+        [self.superview bringSubviewToFront:self];
+        self.inputView.alpha = 1.0f;
         NSDictionary *info = [noti userInfo];
         NSValue *value = [info objectForKey:UIKeyboardFrameEndUserInfoKey];
         keyboardAnimationDuration = [[info objectForKey:UIKeyboardAnimationDurationUserInfoKey] floatValue];
         CGSize keyboardSize = [value CGRectValue].size;
         //NSLog(@"keyboardSize.height = %f",keyboardSize.height);
+        CGRect frame = self.inputView.frame;
+        frame.origin.y = XHInputView_ScreenH - keyboardSize.height - frame.size.height;
         [UIView animateWithDuration:keyboardAnimationDuration animations:^{
-            CGRect frame = self.inputView.frame;
-            frame.origin.y = XHInputView_ScreenH - keyboardSize.height - frame.size.height;
             self.inputView.frame = frame;
             self.backgroundColor = XHInputView_BgViewColor;
             self.showFrameDefault = self.inputView.frame;
@@ -281,15 +292,18 @@ static CGFloat keyboardAnimationDuration = 0.5;
     }
 }
 - (void)keyboardWillDisappear:(NSNotification *)noti{
-    
     if(_textView.isFirstResponder){
+        CGRect frame = self.inputView.frame;
+        frame.origin.y = XHInputView_ScreenH;
         [UIView animateWithDuration:keyboardAnimationDuration animations:^{
-            CGRect frame = self.inputView.frame;
-            frame.origin.y = XHInputView_ScreenH;
+            self.inputView.alpha = 0.0f;
             self.inputView.frame = frame;
             self.backgroundColor = [UIColor clearColor];
         } completion:^(BOOL finished) {
-            [self removeFromSuperview];
+            if (finished) {
+                self.hidden = YES;
+                [self.superview sendSubviewToBack:self];
+            }
         }];
     }
 }
